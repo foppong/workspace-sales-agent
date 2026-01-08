@@ -1,7 +1,6 @@
 """
 File: logic.py
 Description: Backend logic.
-Updates: Generates DYNAMIC Suggestion Chips based on conversation context.
 """
 import os
 import random
@@ -22,7 +21,6 @@ if api_key:
 MAX_SEATS = 10
 
 def generate_random_profiles():
-    """Generates 3 random Micro-SMB profiles."""
     industries = ["Freelance Graphix", "Corner Bakery", "Mobile Car Wash", "Family Law Firm", "Solo Dentist", "IT Fix-it Shop"]
     sizes = ["Solopreneur (1 seat)", "Partnership (2 seats)", "Tiny Team (3 seats)", "Family Biz (5 seats)"]
     pain_points = [
@@ -48,10 +46,6 @@ def generate_random_profiles():
     return profiles
 
 def get_gemini_response(user_input, profile, chat_history):
-    """
-    Simulates a Challenger Sale rep AND generates context-aware user replies.
-    Returns: (text_response, lead_score, list_of_suggestions)
-    """
     if not client: return "Error: API Key not found.", "0", []
 
     system_prompt = f"""
@@ -65,10 +59,6 @@ def get_gemini_response(user_input, profile, chat_history):
     
     OUTPUT FORMAT:
     Response text ||| Lead Score (0-100) ||| Suggestion1 | Suggestion2 | Suggestion3
-    
-    The 3 Suggestions should be short (2-4 words) possible replies the USER might say next.
-    Example:
-    That sounds tough. Most agencies upgrade to Standard for 2TB storage. ||| 40 ||| How much is it? | I don't have budget | Tell me more
     """
 
     contents = [{"role": "user", "parts": [{"text": system_prompt}]}]
@@ -82,7 +72,6 @@ def get_gemini_response(user_input, profile, chat_history):
         response = client.models.generate_content(model=model_id, contents=contents)
         text = response.text
 
-        # Default values
         reply_text = text
         score = "50"
         suggestions = ["Tell me more", "Is it expensive?", "Not interested"]
@@ -103,7 +92,6 @@ def get_gemini_response(user_input, profile, chat_history):
         return f"Connection Error: {str(e)}", "0", []
 
 def summarize_conversation(profile, chat_history, exit_reason):
-    """Categorizes the conversation based on Gold Use Case examples."""
     if not client: return {}
 
     prompt = f"""

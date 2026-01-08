@@ -1,7 +1,7 @@
 """
 File: app.py
 Description: Main entry point.
-Updates: Dynamic Suggestion Chips handling.
+Updates: Added user-friendly instructions to the Welcome Page.
 """
 import streamlit as st
 import ui
@@ -21,29 +21,43 @@ if "simulation_started" not in st.session_state: st.session_state.simulation_sta
 if "exit_page" not in st.session_state: st.session_state.exit_page = False
 if "exit_reason" not in st.session_state: st.session_state.exit_reason = None
 if "summary_data" not in st.session_state: st.session_state.summary_data = {}
-# New state for dynamic suggestions
 if "current_suggestions" not in st.session_state: st.session_state.current_suggestions = []
 
 # --- 3. Routing Logic ---
 
-# SCENE 1: The Pre-Screen
+# SCENE 1: The Pre-Screen (Welcome Page)
 if not st.session_state.simulation_started:
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
+    st.markdown("<br>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 6, 1])
     with c2:
-        st.title("Workspace Sales Agent")
-        st.write("Select a targeted Micro-SMB Profile (<10 Seats):")
+        st.title("Workspace Sales Agent Prototype")
 
+        # --- NEW: Instructions Section ---
+        with st.container(border=True):
+            st.markdown("### 📋 Instructions")
+            st.markdown("""
+            **Welcome to the future of SMB Sales.** This prototype simulates an AI agent embedded in Gmail.
+            
+            1. **Select a Persona:** Choose a business below (e.g., "Corner Bakery") to pre-load specific pain points.
+            2. **Enter the Workspace:** You will land in a simulated inbox. Click the **Sparkle Icon (✨)** on the far right strip.
+            3. **Engage the Agent:** Chat using the **Dynamic Suggestion Chips** or type your own replies.
+            4. **Watch the Brain:** Observe the **Lead Score** update in real-time. Try to get it above **70** to see the Upgrade offer.
+            """)
+
+        st.divider()
+        st.markdown("#### Select a Micro-SMB Persona (<10 Seats)")
+
+        # Profile Cards
         for i, p in enumerate(st.session_state.profiles):
             with st.container(border=True):
-                col_info, col_btn = st.columns([3, 1])
+                col_info, col_btn = st.columns([4, 1])
                 with col_info:
-                    st.subheader(p['industry'])
-                    st.caption(f"{p['size']} • {p['current_sku']}")
+                    st.subheader(f"{p['industry']} ({p['size']})")
                     st.markdown(f"**Pain Point:** {p['pain_point_desc']}")
+                    st.caption(f"Current SKU: {p['current_sku']}")
                 with col_btn:
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("Select", key=f"start_{i}", type="primary", use_container_width=True):
+                    if st.button("Start Simulation", key=f"start_{i}", type="primary", use_container_width=True):
                         st.session_state.selected_profile = p
                         # Initial Hook
                         st.session_state.messages = [{
@@ -58,7 +72,7 @@ if not st.session_state.simulation_started:
                         st.rerun()
 
         st.divider()
-        if st.button("🔄 Shuffle Profiles"):
+        if st.button("🔄 Generate New Personas"):
             st.session_state.profiles = logic.generate_random_profiles()
             st.rerun()
 
@@ -105,21 +119,15 @@ else:
                     # DYNAMIC SUGGESTIONS
                     s_cols = st.columns(len(st.session_state.current_suggestions))
                     for idx, s in enumerate(st.session_state.current_suggestions):
-                        if idx < 3: # Limit to 3 columns to prevent breaking layout
-                            if s_cols[idx].button(s, key=f"sug_{len(st.session_state.messages)}_{idx}"): # Unique key per turn
-                                 # 1. Append User Message
+                        if idx < 3:
+                            if s_cols[idx].button(s, key=f"sug_{len(st.session_state.messages)}_{idx}"):
                                  st.session_state.messages.append({"role": "user", "content": s})
-
-                                 # 2. Get AI Response + NEW Suggestions
                                  resp, new_score, new_chips = logic.get_gemini_response(s, profile, st.session_state.messages)
-
-                                 # 3. Update State
                                  st.session_state.messages.append({"role": "assistant", "content": resp})
                                  st.session_state.lead_score = new_score
                                  st.session_state.current_suggestions = new_chips
                                  st.rerun()
 
-                    # Input Area
                     if prompt := st.chat_input("Reply..."):
                         st.session_state.messages.append({"role": "user", "content": prompt})
                         resp, new_score, new_chips = logic.get_gemini_response(prompt, profile, st.session_state.messages)

@@ -1,7 +1,6 @@
 """
 File: ui.py
 Description: Handles Streamlit UI rendering.
-Updates: Aggressive CSS for tiny Suggestion Chips.
 """
 import streamlit as st
 
@@ -27,7 +26,6 @@ def apply_custom_css():
             .score-badge { font-size: 11px; font-weight: bold; margin-bottom: 5px; }
             
             /* TINY Suggestion Chips */
-            /* We target the buttons inside the horizontal blocks specifically */
             div[data-testid="stHorizontalBlock"] button {
                 font-size: 11px !important;
                 padding: 2px 8px !important;
@@ -106,7 +104,7 @@ def render_exit_page(profile, summary_data):
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         track = summary_data.get("Track", "General")
-        
+
         # Color-coded Banner based on Track
         if track == "UPGRADE":
             st.success("🎉 Outcome: Upgrade Track")
@@ -118,18 +116,17 @@ def render_exit_page(profile, summary_data):
             st.warning("🎓 Outcome: Education Track")
         else:
             st.error("Outcome: No Interest")
-            
+
         with st.container(border=True):
             st.markdown(f"### Recap for: {profile['industry']}")
             st.caption(f"Context: {profile['size']} | {profile['current_sku']}")
             st.divider()
-            
+
             st.markdown("#### 📝 Executive Summary")
             st.write(summary_data.get("Summary", "No summary available."))
-            
+
             st.divider()
-            
-            # The Critical Next Step Section
+
             st.markdown("#### ⏭️ Recommended Next Step")
             next_step = summary_data.get("Next Step", "No action")
             st.info(f"**{next_step}**")
