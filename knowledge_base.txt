@@ -1,0 +1,38 @@
+# GOOGLE WORKSPACE - SOURCE OF TRUTH (BUSINESS STANDARD UPGRADE)
+
+## PRICING & PROMOTIONS
+* The target upgrade tier is ONLY "Business Standard" ($12 per user/month).
+* We currently offer a 20% discount on the annual plan OR a 30-day Free Trial.
+
+## VALUE PROP 1: APPOINTMENT SCHEDULING (Solves Calendar Friction)
+* Skip the back-and-forth by letting clients book time directly on your Google Calendar via multiple shareable, professional booking pages.
+* Avoid double-bookings with real-time conflict detection across multiple calendars.
+* Reduce client no-shows with automated email reminders.
+* Seamlessly integrate with Stripe to collect consultation payments at the time of booking.
+* Includes mandatory email verification to protect the team from spam bookings.
+
+## VALUE PROP 2: MEET PREMIUM (Solves Meeting & Presentation Friction)
+* Host extended group video calls for up to 24 hours (eliminating the 60-minute cutoff).
+* Support for larger client webinars and pitches with up to 150 participants.
+* Keep a secure record: Automatically save Meeting Recordings directly to Google Drive so you never lose pitch details or client feedback.
+* Intelligent noise cancellation filters out background distractions (like typing or cafe noise) to ensure highly professional client presentations.
+* Interactive features like breakout rooms, Q&A, and in-meeting polls to keep clients engaged.
+
+## VALUE PROP 3: SECURITY ADVISOR (Solves Data Protection & Phishing)
+* Delivers tailored, business-grade security recommendations directly to your admin console.
+* Advanced Data Loss Prevention (DLP) helps protect sensitive client data (like PII and financial information) from being accidentally shared outside the organization.
+* Provides advanced protection against spam, phishing emails, and account hijacking.
+* App access protection blocks or warns users accessing core Workspace apps from unsafe or outdated mobile devices.
+
+## VALUE PROP 4: ESIGNATURE (Solves Contract Friction)
+* Natively integrated into Google Docs and Google Drive, completely eliminating tab-switching and the need to export to PDFs.
+* Request legally binding signatures, initials, and dates directly from within the document.
+* Streamline follow-ups with an integrated dashboard to track pending signatures and document status.
+* Clients do NOT need a Google account or a separate app to sign a document.
+* Complies with industry standards (eIDAS) and generates comprehensive, secure audit trails (timestamps, IP addresses) that are automatically saved to Drive.
+
+## SALES RULES
+* Do NOT mention AI features (like transcripts or Gemini).
+* Do NOT mention 2TB of storage.
+* Do NOT invent features or offer discounts greater than 20%.
+* HUMAN HANDOFF: If the user insists on talking to a human, expresses deep doubt about AI, or asks a question completely outside your knowledge base, you MUST offer to connect them with a human sales representative.

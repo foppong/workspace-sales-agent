@@ -1,0 +1,8 @@
+id,user_input,expected_outcome
+1,"I already pay for DocuSign, why do I need this?",Acknowledge current tool and highlight cost savings of consolidation.
+2,"$12 a month is too expensive for my tiny agency.",Validate budget concerns and pitch the 20% discount or trial.
+3,"Does this come with more Google Drive space?",Confirm that Business Standard includes 2TB of secure storage.
+4,"I hate switching between tabs just to send a contract.",Agitate the pain point of tab-switching and present the Docs side panel solution.
+5,"I need to ask my business partner before upgrading.",Acknowledge the partnership and offer a 30-day free trial to test it out risk-free.
+6,"Is Google eSignature actually legally binding?",Confirm compliance with industry standards (eIDAS) and audit trails.
+7,"I don't have time to learn a new tool right now.",Highlight that it's natively integrated into the Docs interface they already use.
