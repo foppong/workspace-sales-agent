@@ -1,7 +1,7 @@
 """
 File: logic.py
 Description: Backend logic. Implements Tool Calling, Chain-of-Thought (CoT) pipeline,
-and Generative UI states (Hiding chips on exit, Upgrade/Pass chips on close).
+and strict formatting parsers to prevent text duplication and UI leaks.
 """
 import os
 import json
@@ -65,27 +65,25 @@ def get_gemini_response(user_input, chat_history):
         AGENTIC INSTRUCTION & CHAIN OF THOUGHT:
         - You have access to a tool called `get_workspace_fact`. 
         - Before generating your conversational response, you MUST output a [THOUGHT] block. 
-        - In your [THOUGHT], identify the user's "Anchor" (the core problem). Then, read their "Buying Temperature" (Hooked vs. Unconvinced vs. Hostile).
+        - In your [THOUGHT], identify the user's "Anchor" (the core problem). Then, read their "Buying Temperature".
         
         STRICT ROUTING RULES (Follow in order of priority):
-        1. HUMAN HANDOFF / JAILBREAK (Hostile/Exit): If the user asks for a human or wants to end the chat, immediately stop pitching. Acknowledge the request, state you will pass the transcript to a specialist, and end the conversation. Output EXACTLY: NONE | NONE
-        2. THE ANCHOR & DRILL DOWN (Unconvinced): If the user is engaging but not sold, do NOT pivot to a new feature. Stay anchored. Pull a DIFFERENT benefit from the SAME value prop in your knowledge base to prove how it solves their anchor problem. Ask a targeted follow-up question.
-        3. THE CLOSE (Hooked): If the user expresses clear positive sentiment, stop drilling. Pivot to the close by offering the Business Standard upgrade ($12/mo). Generate explicit closing chips (e.g., "Let's upgrade" | "I'll pass for now").
+        1. HUMAN HANDOFF / JAILBREAK (Hostile/Exit): If the user asks for a human or wants to end the chat, immediately stop pitching. Acknowledge the request, state you will pass the transcript to a specialist, and end the conversation. Output EXACTLY: End Chat | End Chat
+        2. THE ANCHOR & DRILL DOWN (Unconvinced): Stay strictly anchored to the SINGLE Value Prop you initially introduced (e.g., ONLY discuss eSignature, or ONLY discuss Scheduling). Pitch ONE specific bullet point from that Value Prop's section in your knowledge base. DO NOT cross-sell other features. DO NOT repeatedly say "With Business Standard". Talk naturally about the feature itself. Ask a targeted follow-up question.
+        3. THE CLOSE (Hooked): If the user expresses clear positive sentiment, stop drilling. Pivot to the close by offering the Business Standard upgrade ($12/mo).
 
         UI CHIP GENERATION:
-        - The two chips MUST be direct, logical answers to the specific question you just asked at the end of your response.
-        - For example: If you ask an "A or B" question, Chip 1 should represent "A" and Chip 2 should represent "B". 
-        - Keep chips short, natural, and written in the first-person (max 5-7 words).
+        - The two chips MUST be direct, logical answers to the specific question you just asked.
         - Do NOT wrap the chips in brackets.
-        - If Rule 1 triggers (Handoff/Exit), you MUST output: NONE | NONE
+        - If Rule 1 triggers (Handoff/Exit), you MUST output exactly: End Chat | End Chat
         - If Rule 3 triggers (Close), output one upgrade-focused chip and one polite decline chip.
-        
+
         OUTPUT FORMAT:
         You must format your response EXACTLY like this. Do not use markdown blocks:
         [THOUGHT]
         (Identify Anchor -> Read Buying Temperature -> Select Strategy -> Generate Chips that directly answer your question)
         [/THOUGHT]
-        [Your conversational response] ||| [Lead Score 0-100] ||| [Chip 1 or NONE] | [Chip 2 or NONE]
+        [Your conversational response] ||| [Lead Score 0-100] ||| [Chip 1] | [Chip 2]
         """
 
         contents = [{"role": "user", "parts": [{"text": system_prompt}]}]
@@ -117,11 +115,20 @@ def get_gemini_response(user_input, chat_history):
             response = client.models.generate_content(model=model_id, contents=contents, config=config)
 
         raw_text = response.text or "Error: The AI returned an empty response."
-        clean_text = re.sub(r'\[THOUGHT\].*?\[/THOUGHT\]', '', raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
+
+        # BULLETPROOF PARSER: Physically split to guarantee no [/THOUGHT] leak or duplication
+        if "[/THOUGHT]" in raw_text.upper():
+            # Takes only the text AFTER the thought block
+            clean_text = re.split(r'\[/THOUGHT\]', raw_text, flags=re.IGNORECASE)[-1].strip()
+        else:
+            clean_text = raw_text.strip()
+
+        # Failsafe: Remove literal "NONE | NONE" if LLM hallucinates it into the chat message
+        clean_text = clean_text.replace("NONE | NONE", "").strip()
 
         reply_text = clean_text
         score = "50"
-        suggestions = []  # Ensure this is an empty list, not ["Tell me more", "Is it expensive?"]
+        suggestions = []
 
         if "|||" in clean_text:
             parts = clean_text.split("|||")
@@ -129,9 +136,9 @@ def get_gemini_response(user_input, chat_history):
                 reply_text = parts[0].strip()
                 score = parts[1].strip()
 
-                # Parse chips, strip brackets, and completely filter out "NONE"
+                # Parse chips and strip brackets
                 raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
-                suggestions = [c for c in raw_chips if c.upper() != "NONE" and c != ""]
+                suggestions = [c for c in raw_chips if c != ""]
             elif len(parts) == 2:
                 reply_text = parts[0].strip()
                 score = parts[1].strip()
@@ -143,5 +150,4 @@ def get_gemini_response(user_input, chat_history):
 
 def summarize_conversation(chat_history, exit_reason):
     if not client: return {}
-    # (Summarization logic remains unchanged...)
     return {"Summary": "Completed", "Track": "SALES", "Next Step": "Follow up"}

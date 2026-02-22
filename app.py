@@ -118,6 +118,7 @@ def process_user_input(user_text):
     st.session_state.suggestions = new_suggestions
     st.rerun()
 
+
 def render_demo():
     inject_css()
 
@@ -135,7 +136,8 @@ def render_demo():
 
     if st.session_state.chat_open:
         with st.sidebar:
-            st.markdown("""<div class="chat-header"><span>Google Workspace Guide</span></div>""", unsafe_allow_html=True)
+            st.markdown("""<div class="chat-header"><span>Google Workspace Guide</span></div>""",
+                        unsafe_allow_html=True)
             st.markdown("""<div class="legal-text">This product uses AI.</div>""", unsafe_allow_html=True)
 
             for msg in st.session_state.history:
@@ -144,12 +146,16 @@ def render_demo():
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Renders chips only if the list is not empty
             if st.session_state.suggestions:
                 unique_chips = list(dict.fromkeys(st.session_state.suggestions))
                 for i, opt in enumerate(unique_chips):
                     if st.button(opt, key=f"dynamic_chip_{i}_{opt}"):
-                        process_user_input(opt)
+                        # Restored the End Chat routing functionality
+                        if opt.lower() == "end chat":
+                            st.session_state.view = "ENDED"
+                            st.rerun()
+                        else:
+                            process_user_input(opt)
 
             user_text = st.chat_input("Add details or ask a question...")
             if user_text:
