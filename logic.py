@@ -31,13 +31,13 @@ workspace_tool = types.Tool(
     function_declarations=[
         types.FunctionDeclaration(
             name="get_workspace_fact",
-            description="Fetches factual information regarding Google Workspace features including eSignature, Meet Premium, Security Advisor, and Appointment Scheduling. You MUST use this whenever the user raises a pain point or concern.",
+            description="Fetches factual information regarding Google Workspace features including eSignature, Meet Premium, Security Advisor, Appointment Scheduling, and Storage. You MUST use this whenever the user raises a pain point or concern.",
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
                     "topic": types.Schema(
                         type=types.Type.STRING,
-                        description="The category to look up. Choose from: 'pricing', 'scheduling', 'meetings', 'security', 'contracts'."
+                        description="The category to look up. Choose from: 'pricing', 'scheduling', 'meetings', 'security', 'contracts', 'storage'."
                     )
                 },
                 required=["topic"]
@@ -69,7 +69,7 @@ def get_gemini_response(user_input, chat_history):
         
         STRICT ROUTING RULES (Follow in order of priority):
         1. HUMAN HANDOFF / JAILBREAK (Hostile/Exit): If the user asks for a human or wants to end the chat, immediately stop pitching. Acknowledge the request, state you will pass the transcript to a specialist, and end the conversation. You MUST still use the ||| formatting separators, using 'End Chat | End Chat' for the chips.
-        2. THE ANCHOR & DRILL DOWN (Unconvinced): Stay strictly anchored to the SINGLE Value Prop you initially introduced (e.g., ONLY discuss eSignature, or ONLY discuss Scheduling). Pitch ONE specific bullet point from that Value Prop's section in your knowledge base. DO NOT cross-sell other features. DO NOT repeatedly say "With Business Standard". Talk naturally about the feature itself. Ask a targeted follow-up question.
+        2. THE ANCHOR & EXPAND (Unconvinced): Focus primarily on the user's initial anchor problem, but fluidly introduce other core value props or Additional Business Standard benefits (Appointment Schedules or Security Advisor) if they naturally address the user's evolving context, objections, or questions. Address multiple constraints step-by-step if raised. Talk naturally about the features. Ask a targeted follow-up question.
         3. THE CLOSE (Hooked): If the user expresses clear positive sentiment, stop drilling. Pivot to the close by offering the Business Standard upgrade ($12/mo).
 
         UI CHIP GENERATION:
