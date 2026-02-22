@@ -73,15 +73,17 @@ def get_gemini_response(user_input, chat_history):
         3. THE CLOSE (Hooked): If the user expresses clear positive sentiment, stop drilling. Pivot to the close by offering the Business Standard upgrade ($12/mo). Generate explicit closing chips (e.g., "Let's upgrade" | "I'll pass for now").
 
         UI CHIP GENERATION:
-        - Make chips dynamically match your response.
+        - The two chips MUST be direct, logical answers to the specific question you just asked at the end of your response.
+        - For example: If you ask an "A or B" question, Chip 1 should represent "A" and Chip 2 should represent "B". 
+        - Keep chips short, natural, and written in the first-person (max 5-7 words).
         - Do NOT wrap the chips in brackets.
         - If Rule 1 triggers (Handoff/Exit), you MUST output: NONE | NONE
         - If Rule 3 triggers (Close), output one upgrade-focused chip and one polite decline chip.
-
+        
         OUTPUT FORMAT:
         You must format your response EXACTLY like this. Do not use markdown blocks:
         [THOUGHT]
-        (Identify Anchor -> Read Buying Temperature -> Select Strategy -> Generate Chips)
+        (Identify Anchor -> Read Buying Temperature -> Select Strategy -> Generate Chips that directly answer your question)
         [/THOUGHT]
         [Your conversational response] ||| [Lead Score 0-100] ||| [Chip 1 or NONE] | [Chip 2 or NONE]
         """
@@ -119,7 +121,7 @@ def get_gemini_response(user_input, chat_history):
 
         reply_text = clean_text
         score = "50"
-        suggestions = []
+        suggestions = []  # Ensure this is an empty list, not ["Tell me more", "Is it expensive?"]
 
         if "|||" in clean_text:
             parts = clean_text.split("|||")
