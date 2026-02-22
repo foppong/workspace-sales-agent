@@ -68,7 +68,7 @@ def get_gemini_response(user_input, chat_history):
         - In your [THOUGHT], identify the user's "Anchor" (the core problem). Then, read their "Buying Temperature".
         
         STRICT ROUTING RULES (Follow in order of priority):
-        1. HUMAN HANDOFF / JAILBREAK (Hostile/Exit): If the user asks for a human or wants to end the chat, immediately stop pitching. Acknowledge the request, state you will pass the transcript to a specialist, and end the conversation. Output EXACTLY: End Chat | End Chat
+        1. HUMAN HANDOFF / JAILBREAK (Hostile/Exit): If the user asks for a human or wants to end the chat, immediately stop pitching. Acknowledge the request, state you will pass the transcript to a specialist, and end the conversation. You MUST still use the ||| formatting separators, using 'End Chat | End Chat' for the chips.
         2. THE ANCHOR & DRILL DOWN (Unconvinced): Stay strictly anchored to the SINGLE Value Prop you initially introduced (e.g., ONLY discuss eSignature, or ONLY discuss Scheduling). Pitch ONE specific bullet point from that Value Prop's section in your knowledge base. DO NOT cross-sell other features. DO NOT repeatedly say "With Business Standard". Talk naturally about the feature itself. Ask a targeted follow-up question.
         3. THE CLOSE (Hooked): If the user expresses clear positive sentiment, stop drilling. Pivot to the close by offering the Business Standard upgrade ($12/mo).
 
@@ -142,6 +142,15 @@ def get_gemini_response(user_input, chat_history):
             elif len(parts) == 2:
                 reply_text = parts[0].strip()
                 score = parts[1].strip()
+        else:
+            # FALLBACK: If LLM forgets the ||| separators during a handoff
+            reply_text = clean_text
+            if "End Chat" in clean_text:
+                suggestions = ["End Chat"]
+
+            # SCRUBBER: Physically remove the literal chip text from the chat bubble if it leaked
+        reply_text = re.sub(r'End Chat\s*\|\s*End Chat', '', reply_text, flags=re.IGNORECASE).strip()
+        reply_text = reply_text.replace("NONE | NONE", "").strip()
 
         return reply_text, score, suggestions
 
