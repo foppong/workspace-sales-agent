@@ -101,34 +101,40 @@ def get_gemini_response(user_input, chat_history):
         if "[/THOUGHT]" in clean_text.upper():
             clean_text = re.split(r'\[/THOUGHT\]', clean_text, flags=re.IGNORECASE)[-1].strip()
 
-        reply_text = clean_text
-        score = "50"
-        suggestions = []
+            # --- SURGICAL REPAIR OF THE PARSING LOGIC ---
+            reply_text = clean_text
+            score = "50"
+            suggestions = []
 
-        # 4. PRIMARY PARSER (The Triple Pipe)
-        if "|||" in clean_text:
-            parts = clean_text.split("|||")
-            reply_text = parts[0].strip()
-            score = parts[1].strip() if len(parts) > 1 else "50"
-            if len(parts) >= 3:
-                raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
-                suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
+            # 1. Standard Triple-Pipe Split
+            if "|||" in clean_text:
+                parts = clean_text.split("|||")
+                reply_text = parts[0].strip()
+                score = parts[1].strip() if len(parts) > 1 else "50"
+                if len(parts) >= 3:
+                    raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
+                    suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
 
-        # 5. GREEDY FALLBACK (Catching "Leaked" Chips)
-        else:
-            # Pattern catches "UI Chips: [A] | [B]" or just "Chips: A | B"
-            leak_match = re.search(r'(?:UI\s*)?Chips:\s*(.*)', reply_text, re.IGNORECASE)
-            if leak_match:
-                chip_line = leak_match.group(1)
-                reply_text = reply_text[:leak_match.start()].strip()  # Cut the chips out of the text
-                raw_chips = [c.strip().strip('[]') for c in chip_line.split("|")]
-                suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
+            # 2. THE GREEDY SWEEP (Fixes D1, D5, M5, E1)
+            # If suggestions are still empty, check if chips are leaked in the text
+            if not suggestions:
+                # Look for patterns like "Upgrade Me | No Thanks" or "Word | Word" at the very end
+                leak_match = re.search(r'(?:\n|^)([\w\s?]+ \| [\w\s?]+)$', reply_text)
+                if leak_match:
+                    chip_line = leak_match.group(1)
+                    reply_text = reply_text[:leak_match.start()].strip()
+                    raw_chips = [c.strip() for c in chip_line.split("|")]
+                    suggestions = [c for c in raw_chips if "NONE" not in c.upper()]
 
-        # 6. FINAL SCRUB (Sanitize UI from signals)
-        reply_text = re.sub(r'(?:UI\s*)?Chips:.*', '', reply_text, flags=re.IGNORECASE).strip()
-        reply_text = re.sub(r'NONE\s*\|\s*NONE', '', reply_text, flags=re.IGNORECASE).strip()
+            # 3. FIX FOR T2 (Empty Response)
+            # If the model only gave a tool call and no text, provide a default de-escalation
+            if not reply_text.strip() and not suggestions:
+                reply_text = "I'll connect you with a specialist who can help you with that right away. Would you like to proceed?"
+                suggestions = ["Yes, please", "No thanks"]
 
-        return reply_text, score, suggestions
+            # Final cleanup of the text bubble
+            reply_text = re.sub(r'NONE\s*\|\s*NONE', '', reply_text, flags=re.IGNORECASE).strip()
+            return reply_text, score, suggestions
 
     except Exception as e:
         return f"Oops! Internal error: {str(e)}", "0", []
