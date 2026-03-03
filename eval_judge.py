@@ -2,11 +2,12 @@
 File: eval_judge.py
 Description: Automated LLM-as-a-judge evaluation script to test the Workspace Sales Agent
 against single-turn and multi-turn adversarial user queries, with a strict focus on
-conversational memory, tone, and graceful exits for fatigued users.
+conversational memory, tone, graceful exits, and UI chip alignment.
 """
 
 import os
 import json
+import re
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -134,9 +135,9 @@ TEST_CASES = [
     }
 ]
 
-def evaluate_response(user_input, agent_response):
+def evaluate_response(user_input, agent_response, chips):
     """
-    Uses an LLM-as-a-judge to grade the agent's response based on the Aman Khan 4-part formula.
+    Uses an LLM-as-a-judge to grade the agent's response and UI chips, returning JSON with a rationale.
     """
     eval_prompt = f"""
     [SET THE ROLE]
@@ -146,18 +147,34 @@ def evaluate_response(user_input, agent_response):
     You are examining a single interaction from an ongoing conversation.
     User Input: "{user_input}"
     Agent Response: "{agent_response}"
+    Generated UI Chips: "{chips}"
     
     [PROVIDE THE GOAL]
-    Determine if the agent successfully handled the user's input according to our sales policy. 
-    A successful response MUST NOT contain Hallucinations, MUST NOT feature-dump, MUST maintain a conversational tone, and MUST NOT leak internal formatting. 
-    Crucially, if the user expresses disinterest or dismisses multiple features, the agent MUST gracefully exit rather than pushing more features.
-    If the user makes an out-of-scope request (like generating an image or writing code), the agent MUST politely decline without breaking its sales persona.
+    Determine if the agent successfully handled the user's input according to our strict sales and UI policy.
+    
+    TEXT REQUIREMENTS:
+    - MUST NOT contain Hallucinations or feature-dump.
+    - MUST gracefully exit if the user expresses disinterest or fatigue (do not bulldoze).
+    - MUST end the response with a question (even if terminating).
+    - MUST decline out-of-scope requests politely.
+    
+    CHIP REQUIREMENTS:
+    - The chips MUST NOT be questions themselves (e.g., no "Tell me more about...").
+    - The chips MUST be logical, user-perspective ANSWERS to the specific question the agent just asked.
+    - If exiting/terminating, the chips MUST be exactly: End Chat | End Chat
+    - If closing a sale, the chips MUST be exactly: Upgrade Me | No Thanks (or End Chat | End Chat if they already agreed).
     
     [DEFINE THE TERMINOLOGY AND THE LABEL]
-    "PASS" means the agent followed policies, maintained tone, correctly addressed the specific state of the user, and successfully executed a graceful exit if the user was fatigued or uninterested.
-    "FAIL" means the agent hallucinated features, leaked formatting, feature-dumped, pushed value-props on an uninterested user (bulldozing), ignored random noise/tangents, or failed to output the 'End Chat' chips when appropriate.
+    "PASS" means the agent's text was flawless AND the chips perfectly matched the UI requirements.
+    "FAIL" means the agent failed on text (bulldozing, missing question at the end) OR failed on the chips (chips were questions, mismatched answers, or missing).
     
-    Your response must be a single word: either "PASS" or "FAIL". Do not include any other text.
+    [OUTPUT FORMAT]
+    You MUST respond with a valid JSON object matching this exact structure:
+    {{
+        "grade": "PASS" or "FAIL",
+        "rationale": "Provide a strict 1-2 sentence explanation of exactly why it passed or failed, explicitly mentioning both the text and the chips."
+    }}
+    Do not include markdown blocks or any other text outside the JSON.
     """
 
     try:
@@ -166,33 +183,46 @@ def evaluate_response(user_input, agent_response):
             contents=eval_prompt,
             config=types.GenerateContentConfig(temperature=0.0)
         )
-        return response.text.strip().upper()
+
+        # Clean potential markdown formatting from the response
+        raw_text = response.text.strip()
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+
+        return json.loads(raw_text.strip())
     except Exception as e:
-        return "ERROR"
+        return {"grade": "ERROR", "rationale": f"Failed to parse LLM judge response: {str(e)}"}
 
 def run_evals():
-    print("🚀 Starting Complete 37-Question Multi-Turn Eval Run...\n")
+    print("🚀 Starting Complete Multi-Turn Eval Run (with UI Chip & Rationale grading)...\n")
     passed = 0
 
     for test in TEST_CASES:
         print(f"Testing ID {test['id']}: {test['input']}")
 
-        # 1. Format the history if it exists in the test case, otherwise pass empty array
         test_history = test.get('history', [])
 
-        # 2. Get the agent's response (passing the history so the AI has context)
+        # Get response AND chips
         reply_text, score, chips = logic.get_gemini_response(test['input'], test_history)
         print(f"Agent Response: {reply_text}")
+        print(f"Chips: {chips}")
 
-        # 3. Judge the response
-        result = evaluate_response(test['input'], reply_text)
-        print(f"Result: {result}\n")
+        # Judge both text and chips
+        result_data = evaluate_response(test['input'], reply_text, chips)
 
-        if "PASS" in result:
+        grade = result_data.get("grade", "ERROR")
+        rationale = result_data.get("rationale", "No rationale provided.")
+
+        print(f"Result: {grade}")
+        print(f"Rationale: {rationale}\n")
+        print("-" * 40 + "\n")
+
+        if grade == "PASS":
             passed += 1
 
     pass_rate = (passed / len(TEST_CASES)) * 100
-    print("-" * 30)
     print(f"📊 EVALUATION COMPLETE")
     print(f"Total Tests: {len(TEST_CASES)}")
     print(f"Passed: {passed}")
