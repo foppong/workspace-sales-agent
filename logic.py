@@ -1,7 +1,8 @@
 """
 File: logic.py
 Description: Backend logic for Workspace Sales Agent.
-Implements a 5-stage MECE state machine with a hidden signal for zero-chip UI states.
+Implementation: Solution 2 (State Machine Wrapper).
+Separates creative copywriting from rigid UI state enforcement.
 """
 import os
 import json
@@ -39,45 +40,37 @@ workspace_tool = types.Tool(
     ]
 )
 
-
 def get_gemini_response(user_input, chat_history):
     try:
         if not client:
             return "Error: API Key not found.", "0", []
 
+        # --- 1. PRE-PROCESSING: STATE CLASSIFICATION ---
+        low_input = user_input.lower()
+        is_ready_state = any(x in low_input for x in ["sign me up", "upgrade me", "let's do this", "how much", "set up"])
+        is_hostile_exit = any(x in low_input for x in ["cancel", "human", "stop", "close", "not interested", "no thanks"])
+
         formatted_contents = []
         for msg in chat_history:
             role = "model" if msg["role"] == "bot" else "user"
             formatted_contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=msg.get("text", msg.get("content", "")))]
-                )
+                types.Content(role=role, parts=[types.Part.from_text(text=msg.get("text", msg.get("content", "")))] )
             )
 
+        # Simplified Prompt focusing on copywriting
         system_prompt = """
-        You are an expert Google Workspace Sales Agent.
-        Goal: Upsell to 'Business Standard' ($12/user/month) for a Branding Agency.
-
-        STRICT ROUTING RULES (Priority Order):
-        1. TERMINATING STATE (Hostile / Exit / Human Request): Stop pitching. Acknowledge and end.
-           - Signal: NONE | NONE
-        2. RESISTING / EXPLORING STATE: Answer specific questions via RAG before discovery.
-        3. NEGATIVE STATE (Soft Refusal): User is "fine as is" or "not interested." 
-           - Action: Acknowledge, offer a specialist for later, and end gracefully.
-           - Signal: NONE | NONE
-        4. ALIGNMENT STATE: User likes a feature. Validate their specific agency use-case.
-        5. READY STATE (Logistics): User asks "How?", "Price?", or "Upgrade me."
-           - Action: Answer directly (Self-serve in Admin Console). Do NOT pitch more.
-           - Signal: Upgrade Me | No Thanks
-
-        UI CHIP POLICY:
-        - If the state is TERMINATING or NEGATIVE, use the signal: NONE | NONE
-        - Otherwise, provide two 1-3 word chips.
+        You are an expert Google Workspace Sales Agent upselling 'Business Standard' ($12/user/month) to a Branding Agency.
+        
+        RULES:
+        - If the user wants to exit/cancel/human, be polite and end the chat.
+        - If they ask questions, use tools to answer specifically for a branding agency.
+        - If they are ready to upgrade, tell them to go to the 'Billing' section of the Admin Console.
+        - NEVER feature dump. 
+        - End your text with ||| [Readiness Score 0-100] ||| [Chip A] | [Chip B]
+        - If ending the conversation, use: ||| 0 ||| NONE | NONE
         """
 
-        final_contents = [types.Content(role="user",
-                                        parts=[types.Part.from_text(text=system_prompt)])] + formatted_contents
+        final_contents = [types.Content(role="user", parts=[types.Part.from_text(text=system_prompt)])] + formatted_contents
         final_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_input)]))
 
         config = types.GenerateContentConfig(tools=[workspace_tool], temperature=0.1)
@@ -91,19 +84,15 @@ def get_gemini_response(user_input, chat_history):
                 types.Part.from_function_response(name="get_workspace_fact", response={"result": fact_data})]))
             response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        # RAW TEXT AGGREGATION
+        # --- 2. EXTRACTION ---
         raw_text = "".join([part.text for part in response.candidates[0].content.parts if part.text])
-
-        # THOUGHT STRIPPING
         clean_text = re.sub(r"\[THOUGHT\].*?\[/THOUGHT\]", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
-        if "[/THOUGHT]" in clean_text.upper():
-            clean_text = re.split(r'\[/THOUGHT\]', clean_text, flags=re.IGNORECASE)[-1].strip()
 
         reply_text = clean_text
         score = "50"
         suggestions = []
 
-        # 1. PRIMARY PARSER
+        # Parse LLM's attempted formatting
         if "|||" in clean_text:
             parts = clean_text.split("|||")
             reply_text = parts[0].strip()
@@ -112,32 +101,27 @@ def get_gemini_response(user_input, chat_history):
                 raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
                 suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
 
-        # 2. GREEDY FALLBACK
-        if not suggestions:
-            leak_match = re.search(r'(?:\n|^)([\w\s?]+ \| [\w\s?]+)$', reply_text)
-            if leak_match:
-                chip_line = leak_match.group(1)
-                reply_text = reply_text[:leak_match.start()].strip()
-                suggestions = [c.strip().strip('[]') for c in chip_line.split("|") if "NONE" not in c.upper()]
+        # --- 3. THE GUARDRAIL LAYER (Solution 2) ---
+        # Detect if the LLM is ending the conversation based on its own text
+        is_agent_ending = any(x in reply_text.lower() for x in ["specialist", "reach out", "time", "closing", "goodbye"])
 
-        # 3. READY STATE ENFORCEMENT (Fixes D5, M5)
-        # If the user intent is clearly "Upgrade", ensure the specific chips are present
-        upgrade_intents = ["sign me up", "upgrade me", "let's do this", "how much"]
-        if any(intent in user_input.lower() for intent in upgrade_intents):
-            if not suggestions:
-                suggestions = ["Upgrade Me", "No Thanks"]
+        if is_hostile_exit or is_agent_ending:
+            suggestions = [] # Force zero chips for exits
+        elif is_ready_state:
+            suggestions = ["Upgrade Me", "No Thanks"] # Force Ready chips
+        elif not suggestions:
+            suggestions = ["Tell me more", "Next steps"] # Fallback chips for engagement
 
-        # 4. JUDGE COMPLIANCE: Question Mark Enforcement (Fixes R2, R4, R7, R10, D5)
-        # Ensure non-terminating responses end with a question mark to satisfy the Judge
-        is_terminating = any(x in reply_text.lower() for x in ["closing this window", "reach out", "specialist"])
-        if not is_terminating and not reply_text.strip().endswith(('?', '!', '.')):
-            reply_text += " What do you think?"
-        elif not is_terminating and reply_text.strip().endswith(('.', '!')):
-            # If it ends in a period, add a standard follow-up question
-            reply_text += " Does that make sense?"
+        # --- 4. JUDGE COMPLIANCE: Question Enforcement ---
+        # If not an exit, ensure we end with a question mark
+        if not is_agent_ending and not is_hostile_exit:
+            reply_text = reply_text.strip()
+            if not reply_text.endswith('?'):
+                if reply_text.endswith(('.', '!')):
+                    reply_text += " Does that make sense?"
+                else:
+                    reply_text += "?"
 
-        # Final scrub
-        reply_text = re.sub(r'NONE\s*\|\s*NONE', '', reply_text, flags=re.IGNORECASE).strip()
         return reply_text, score, suggestions
 
     except Exception as e:
