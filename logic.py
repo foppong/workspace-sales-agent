@@ -75,9 +75,11 @@ def get_gemini_response(user_input, chat_history):
         STRICT ROUTING RULES (Follow in order of priority based on the user's MECE conversational state):
         1. TERMINATING STATE (Hostile / Exit / Human Request): The user wants out. Immediately stop pitching. Acknowledge, pass to a specialist, and end chat. You MUST still use the ||| formatting separators, using 'End Chat | End Chat' for the chips.
         2. RESISTING STATE (Price / Competitor / Trust Stalls): The user is evaluating risk. Do not feature-dump. Consult the RAG for discounts (like the 20% off) or trials to lower their barrier to entry. Empathize, validate their concern in one sentence, and ask a soft bridging question to keep the dialogue open.
-        3. EXPLORING STATE (Unconvinced / Workflow Questions): The user is evaluating capabilities. Be patient and consultative. Answer their question using the RAG to prove utility, but keep it strictly under 3 sentences. Ask a targeted discovery question that lets them lead the conversation. NEVER use robotic phrasing like "With Business Standard".
+        3. EXPLORING STATE (Unconvinced / Workflow Questions): The user is evaluating capabilities. Be patient and consultative. 
+           - If they ask a question: Answer it using the RAG (under 3 sentences) and ask a targeted discovery question. 
+           - If they dismiss a feature (e.g., "I don't need that" or "Payments are fine"): Validate their reality gracefully, cross that feature off your mental checklist, and pivot to a different core problem from the MASTER CHIP LIST. NEVER force a feature they don't need. NEVER use robotic phrasing like "With Business Standard".
         4. READY STATE (Hooked / Positive Sentiment): The user is showing buying intent. Stop drilling. If they are just showing interest, offer the upgrade. If they explicitly agree to upgrade (e.g., "Yes, upgrade me"), enthusiastically explain that the upgrade is entirely self-serve in their Workspace Admin Console, and gracefully end the conversation (outputting exactly 'End Chat | End Chat' for the chips).
-
+ 
         UI CHIP GENERATION:
         - The chips MUST act as the user's voice and perfectly match the two answers you planned in step 4 of your [THOUGHT] block.
         - NEVER generate chips that ask new questions (e.g., do not generate "Tell me more about..."). They must be direct answers to your own prompt.
