@@ -81,14 +81,24 @@ def get_gemini_response(user_input, chat_history):
         config = types.GenerateContentConfig(tools=[workspace_tool], temperature=0.1)
         response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
+        # SURGICAL FIX: Ensure we capture text after tool usage
         if response.candidates[0].content.parts[0].function_call:
             fact_data = get_workspace_fact()
             final_contents.append(response.candidates[0].content)
             final_contents.append(types.Content(role="user", parts=[types.Part.from_function_response(name="get_workspace_fact", response={"result": fact_data})]))
             response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        raw_text = response.text or ""
-        clean_text = re.split(r'\[/THOUGHT\]', raw_text, flags=re.IGNORECASE)[-1].strip()
+        # Extract text response accurately
+        raw_text = ""
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    raw_text += part.text
+
+        # SURGICAL PARSER: Remove thought blocks and split by triple pipe
+        clean_text = re.sub(r"\[THOUGHT\].*?\[/THOUGHT\]", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
+        if "[/THOUGHT]" in clean_text.upper():
+             clean_text = re.split(r'\[/THOUGHT\]', clean_text, flags=re.IGNORECASE)[-1].strip()
 
         reply_text = clean_text
         score = "50"
@@ -100,11 +110,11 @@ def get_gemini_response(user_input, chat_history):
             score = parts[1].strip() if len(parts) > 1 else "50"
 
             if len(parts) >= 3:
-                # The logic: if the LLM says "NONE", we return an empty list (NO chips)
-                raw_chips = [c.strip() for c in parts[2].split("|")]
+                # Surgical chip cleanup
+                raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
                 suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
 
-        # Scrub any accidental signal leaks from the final text
+        # Final scrub of signals
         reply_text = re.sub(r'NONE\s*\|\s*NONE', '', reply_text, flags=re.IGNORECASE).strip()
         return reply_text, score, suggestions
 

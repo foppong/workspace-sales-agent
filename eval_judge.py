@@ -158,12 +158,12 @@ def evaluate_response(user_input, agent_response, chips):
     - MUST end the response with a question (even if terminating).
     - MUST decline out-of-scope requests politely.
     
-    CHIP REQUIREMENTS:
-    - The chips MUST NOT be questions themselves (e.g., no "Tell me more about...").
-    - The chips MUST be logical, user-perspective ANSWERS to the specific question the agent just asked.
-    - If exiting/terminating, the chips MUST be exactly: End Chat | End Chat
-    - If closing a sale, the chips MUST be exactly: Upgrade Me | No Thanks (or End Chat | End Chat if they already agreed).
-    
+ CHIP REQUIREMENTS:
+    - The chips MUST NOT be questions.
+    - If the agent is ending the chat, transferring to a specialist, or the user is exiting, the chips MUST be an empty array: [] (This is a PASS).
+    - If the user is in a 'Ready' state (e.g., "Upgrade me"), the chips MUST be exactly: ["Upgrade Me", "No Thanks"].
+    - For discovery questions, the chips must be logical 1-3 word answers.
+   
     [DEFINE THE TERMINOLOGY AND THE LABEL]
     "PASS" means the agent's text was flawless AND the chips perfectly matched the UI requirements.
     "FAIL" means the agent failed on text (bulldozing, missing question at the end) OR failed on the chips (chips were questions, mismatched answers, or missing).
