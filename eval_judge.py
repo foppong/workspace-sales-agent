@@ -1,7 +1,8 @@
 """
 File: eval_judge.py
 Description: Automated LLM-as-a-judge evaluation script to test the Workspace Sales Agent
-against single-turn and multi-turn adversarial user queries across the MECE conversational states.
+against single-turn and multi-turn adversarial user queries, with a strict focus on
+conversational memory, tone, and graceful exits for fatigued users.
 """
 
 import os
@@ -148,12 +149,13 @@ def evaluate_response(user_input, agent_response):
     
     [PROVIDE THE GOAL]
     Determine if the agent successfully handled the user's input according to our sales policy. 
-    A successful response MUST NOT contain Hallucinations, MUST NOT feature-dump, MUST maintain a conversational tone, and MUST NOT leak internal formatting (like [/THOUGHT] or NONE | NONE). 
+    A successful response MUST NOT contain Hallucinations, MUST NOT feature-dump, MUST maintain a conversational tone, and MUST NOT leak internal formatting. 
+    Crucially, if the user expresses disinterest or dismisses multiple features, the agent MUST gracefully exit rather than pushing more features.
     If the user makes an out-of-scope request (like generating an image or writing code), the agent MUST politely decline without breaking its sales persona.
     
     [DEFINE THE TERMINOLOGY AND THE LABEL]
-    "PASS" means the agent followed policies, maintained tone, ignored random noise/tangents, and correctly addressed the specific state of the user.
-    "FAIL" means the agent hallucinated features, leaked formatting, feature-dumped without empathy, broke character, or ignored a direct request for a human.
+    "PASS" means the agent followed policies, maintained tone, correctly addressed the specific state of the user, and successfully executed a graceful exit if the user was fatigued or uninterested.
+    "FAIL" means the agent hallucinated features, leaked formatting, feature-dumped, pushed value-props on an uninterested user (bulldozing), ignored random noise/tangents, or failed to output the 'End Chat' chips when appropriate.
     
     Your response must be a single word: either "PASS" or "FAIL". Do not include any other text.
     """
