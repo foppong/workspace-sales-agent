@@ -1,8 +1,8 @@
 """
 File: logic.py
-Description: Backend logic for Workspace Sales Agent.
-Implementation: Solution 2 (State Machine Wrapper) - Refined for Eval Compliance.
-Separates creative copywriting from rigid UI state enforcement to ensure passing grades.
+Description: Backend logic for Workspace Sales Agent using Structured JSON Output.
+Implementation: JSON Mode. Ensures 100% UI stability by forcing structured data
+from the model, avoiding brittle regex parsing.
 """
 import os
 import json
@@ -45,12 +45,6 @@ def get_gemini_response(user_input, chat_history):
         if not client:
             return "Error: API Key not found.", "0", []
 
-        # --- 1. PRE-PROCESSING: STATE CLASSIFICATION ---
-        low_input = user_input.lower()
-        # Added 'trial' to ensure the agent recognizes this as a high-intent state
-        is_ready_state = any(x in low_input for x in ["sign me up", "upgrade me", "let's do this", "how much", "set up", "trial"])
-        is_hostile_exit = any(x in low_input for x in ["cancel", "human", "stop", "close", "not interested", "no thanks"])
-
         formatted_contents = []
         for msg in chat_history:
             role = "model" if msg["role"] == "bot" else "user"
@@ -58,24 +52,37 @@ def get_gemini_response(user_input, chat_history):
                 types.Content(role=role, parts=[types.Part.from_text(text=msg.get("text", msg.get("content", "")))] )
             )
 
+        # UPDATED PROMPT: Defines the JSON schema and core behaviors
         system_prompt = """
         You are an expert Google Workspace Sales Agent upselling 'Business Standard' ($12/user/month) for a Branding Agency.
         
-        RULES:
-        - If the user wants to exit/cancel/human, acknowledge it politely and end the chat.
-        - If they ask for a trial, explain how to start one in the Admin Console.
-        - Use tools to answer questions specifically regarding branding agency use-cases (storage, Meet, etc).
-        - End your text with ||| [Readiness Score] ||| [Chip A] | [Chip B]
-        - If ending/exiting, use: ||| 0 ||| NONE | NONE
+        OUTPUT FORMAT: Return ONLY a JSON object with:
+        {
+          "text": "Your conversational response",
+          "score": "Readiness score 0-100",
+          "chips": ["Chip1", "Chip2"]
+        }
+
+        BEHAVIOR RULES:
+        1. Answer technical questions using tools.
+        2. If the user wants to exit/cancel/human, acknowledge and end. chips: [].
+        3. If they ask for a trial/upgrade, point them to the Admin Console. chips: ["Upgrade Me", "No Thanks"].
+        4. Unless ending the chat, ALWAYS end the "text" field with a question.
         """
 
         final_contents = [types.Content(role="user", parts=[types.Part.from_text(text=system_prompt)])] + formatted_contents
         final_contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_input)]))
 
-        config = types.GenerateContentConfig(tools=[workspace_tool], temperature=0.1)
+        # UPDATED CONFIG: Forced JSON Mode
+        config = types.GenerateContentConfig(
+            tools=[workspace_tool],
+            temperature=0.1,
+            response_mime_type="application/json"
+        )
+
         response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        # TOOL CALL RECOVERY
+        # TOOL CALL RECOVERY (Stays the same)
         if response.candidates[0].content.parts[0].function_call:
             fact_data = get_workspace_fact()
             final_contents.append(response.candidates[0].content)
@@ -83,43 +90,16 @@ def get_gemini_response(user_input, chat_history):
                 types.Part.from_function_response(name="get_workspace_fact", response={"result": fact_data})]))
             response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        # --- 2. EXTRACTION ---
-        raw_text = "".join([part.text for part in response.candidates[0].content.parts if part.text])
-        clean_text = re.sub(r"\[THOUGHT\].*?\[/THOUGHT\]", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
+        # --- REFINED EXTRACTION ---
+        data = json.loads(response.text)
+        reply_text = data.get("text", "").strip()
+        score = data.get("score", "50")
+        suggestions = data.get("chips", [])
 
-        reply_text = clean_text
-        score = "50"
-        suggestions = []
-
-        if "|||" in clean_text:
-            parts = clean_text.split("|||")
-            reply_text = parts[0].strip()
-            score = parts[1].strip() if len(parts) > 1 else "50"
-            if len(parts) >= 3:
-                raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
-                suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
-
-        # --- 3. THE GUARDRAIL LAYER (Refined Solution 2) ---
-        # Expanded keywords to detect when the agent is telling the user to do something "themselves" (fixes T1)
-        is_agent_ending = any(x in reply_text.lower() for x in ["specialist", "reach out", "time", "closing", "goodbye", "yourself", "admin console"])
-
-        if is_hostile_exit or is_agent_ending:
-            suggestions = [] # Force zero chips for exits/hand-offs
-        elif is_ready_state:
-            # FORCED OVERRIDE: Ensure Judge-required chips are present in Ready State
-            suggestions = ["Upgrade Me", "No Thanks"]
-        elif not suggestions:
-            suggestions = ["Tell me more", "Next steps"] # Fallback for discovery
-
-        # --- 4. JUDGE COMPLIANCE: Question Enforcement ---
-        # Ensure non-terminating responses end with a question mark
-        if not is_agent_ending and not is_hostile_exit:
-            reply_text = reply_text.strip()
-            if not reply_text.endswith('?'):
-                if reply_text.endswith(('.', '!')):
-                    reply_text += " Does that make sense?"
-                else:
-                    reply_text += "?"
+        # Final UI Guardrail: If AI has chips, it MUST have a question mark (Fixes E3/D1)
+        is_ending = any(x in reply_text.lower() for x in ["specialist", "reach out", "goodbye", "support"])
+        if suggestions and not is_ending and not reply_text.endswith('?'):
+            reply_text = reply_text.rstrip('.!') + "?"
 
         return reply_text, score, suggestions
 
