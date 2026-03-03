@@ -24,12 +24,16 @@ if api_key:
 def load_golden_dataset():
     dataset = {}
     try:
-        with open('golden_dataset.csv', mode='r', encoding='utf-8') as f:
+        # Changed encoding to 'utf-8-sig' to handle special characters
+        with open('golden_dataset.csv', mode='r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                dataset[row['id']] = row['expected_outcome']
+                if 'id' in row and 'expected_outcome' in row:
+                    dataset[row['id']] = row['expected_outcome']
     except FileNotFoundError:
         print("⚠️ golden_dataset.csv not found. Running without expected outcomes.")
+    except Exception as e:
+        print(f"⚠️ Error reading CSV: {e}")
     return dataset
 
 # --- TEST CASES (The Complete 40) ---
