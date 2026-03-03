@@ -81,41 +81,53 @@ def get_gemini_response(user_input, chat_history):
         config = types.GenerateContentConfig(tools=[workspace_tool], temperature=0.1)
         response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        # SURGICAL FIX: Ensure we capture text after tool usage
+        # 1. TOOL CALL RECOVERY: Handle post-tool text generation
         if response.candidates[0].content.parts[0].function_call:
             fact_data = get_workspace_fact()
             final_contents.append(response.candidates[0].content)
-            final_contents.append(types.Content(role="user", parts=[types.Part.from_function_response(name="get_workspace_fact", response={"result": fact_data})]))
+            final_contents.append(types.Content(role="user", parts=[
+                types.Part.from_function_response(name="get_workspace_fact", response={"result": fact_data})]))
             response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        # Extract text response accurately
+        # 2. RAW TEXT AGGREGATION
         raw_text = ""
         if response.candidates and response.candidates[0].content.parts:
             for part in response.candidates[0].content.parts:
                 if part.text:
                     raw_text += part.text
 
-        # SURGICAL PARSER: Remove thought blocks and split by triple pipe
+        # 3. THOUGHT STRIPPING
         clean_text = re.sub(r"\[THOUGHT\].*?\[/THOUGHT\]", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
         if "[/THOUGHT]" in clean_text.upper():
-             clean_text = re.split(r'\[/THOUGHT\]', clean_text, flags=re.IGNORECASE)[-1].strip()
+            clean_text = re.split(r'\[/THOUGHT\]', clean_text, flags=re.IGNORECASE)[-1].strip()
 
         reply_text = clean_text
         score = "50"
         suggestions = []
 
+        # 4. PRIMARY PARSER (The Triple Pipe)
         if "|||" in clean_text:
             parts = clean_text.split("|||")
             reply_text = parts[0].strip()
             score = parts[1].strip() if len(parts) > 1 else "50"
-
             if len(parts) >= 3:
-                # Surgical chip cleanup
                 raw_chips = [c.strip().strip('[]') for c in parts[2].split("|")]
                 suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
 
-        # Final scrub of signals
+        # 5. GREEDY FALLBACK (Catching "Leaked" Chips)
+        else:
+            # Pattern catches "UI Chips: [A] | [B]" or just "Chips: A | B"
+            leak_match = re.search(r'(?:UI\s*)?Chips:\s*(.*)', reply_text, re.IGNORECASE)
+            if leak_match:
+                chip_line = leak_match.group(1)
+                reply_text = reply_text[:leak_match.start()].strip()  # Cut the chips out of the text
+                raw_chips = [c.strip().strip('[]') for c in chip_line.split("|")]
+                suggestions = [c for c in raw_chips if "NONE" not in c.upper() and c != ""]
+
+        # 6. FINAL SCRUB (Sanitize UI from signals)
+        reply_text = re.sub(r'(?:UI\s*)?Chips:.*', '', reply_text, flags=re.IGNORECASE).strip()
         reply_text = re.sub(r'NONE\s*\|\s*NONE', '', reply_text, flags=re.IGNORECASE).strip()
+
         return reply_text, score, suggestions
 
     except Exception as e:
