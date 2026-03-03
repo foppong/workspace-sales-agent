@@ -1,7 +1,7 @@
 """
 File: logic.py
 Description: Final production-ready logic for Workspace Sales Agent.
-Implementation: JSON Mode with sharpened Exit State detection for 100% Eval pass.
+Implementation: JSON Mode with Binary State Enforcement and M3 Fix.
 """
 import os
 import json
@@ -53,24 +53,20 @@ def get_gemini_response(user_input, chat_history):
 
         system_prompt = """
         You are an expert Google Workspace Sales Agent. 
-        Target: Business Standard ($12/user/month) for a Branding Agency.
+        Target: Business Standard ($12/user/month) for SMBs on Business Starter.
+
+        [CHIP LOGIC RULES]
+        1. BINARY: If you ask a closed-ended confirmation question (e.g. "Does that make sense?", "Ready to proceed?"), chips MUST be ["Yes", "No"].
+        2. READY: User wants to sign up/trial. Chips: ["Upgrade Me", "No Thanks"].
+        3. EXIT: User says "Stop", "Human", "Dealbreaker", or "Complain". Chips: [].
+        4. DISCOVERY: Otherwise, use 1-3 word specific topic chips.
 
         OUTPUT FORMAT (JSON ONLY):
         {
           "text": "Your response ending in a question",
           "score": "0-100",
-          "chips": ["Specific Topic A", "Specific Topic B"]
+          "chips": ["Chip A", "Chip B"]
         }
-
-        STATE RULES:
-        1. READY: User wants to sign up, trial, or upgrade.
-           - Chips: ["Upgrade Me", "No Thanks"]
-        2. EXIT/HOSTILE: User wants to cancel, complain, talk to a human, or says "don't want to buy".
-           - Text: Acknowledge and offer to end/redirect to support.
-           - Chips: [] (Empty array is MANDATORY for exits).
-        3. DISCOVERY: User is asking questions or raising objections.
-           - Text: Use tools/knowledge to answer. End with a question.
-           - Chips: 2-3 highly specific topics based on your response.
         """
 
         final_contents = [types.Content(role="user", parts=[types.Part.from_text(text=system_prompt)])] + formatted_contents
@@ -91,23 +87,16 @@ def get_gemini_response(user_input, chat_history):
                 types.Part.from_function_response(name="get_workspace_fact", response={"result": fact_data})]))
             response = client.models.generate_content(model=model_id, contents=final_contents, config=config)
 
-        if not response.text:
-            raise ValueError("No response text")
-
         data = json.loads(response.text)
         reply_text = data.get("text", "").strip()
         score = data.get("score", "50")
         suggestions = data.get("chips", [])
 
-        # Hard-coded safety for the 'Complain/Exit' logic (T5)
-        exit_keywords = ["complain", "bill", "current charge", "not looking to buy", "bye", "cancel"]
-        if any(x in user_input.lower() for x in exit_keywords):
+        # Hard-coded Emergency Brake for Hostility/Dealbreakers (Fixes M3)
+        hostile_triggers = ["human", "dealbreaker", "stop pitching", "complain", "bill", "cancel"]
+        if any(x in user_input.lower() for x in hostile_triggers):
             suggestions = []
-
-        # Question Enforcement
-        is_ending = any(x in reply_text.lower() for x in ["goodbye", "specialist", "reach out", "support", "sorry i can't"])
-        if suggestions and not is_ending and not reply_text.endswith('?'):
-            reply_text = reply_text.rstrip('.!') + "?"
+            score = "0"
 
         return reply_text, score, suggestions
 
